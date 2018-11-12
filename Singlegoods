@@ -1,0 +1,314 @@
+import numpy as np
+import pandas
+import os
+import re
+import datetime
+import matplotlib.pyplot as plt1
+import json
+
+def main():
+    year = input('input the year you want to look:')
+    filename = ('{}.csv'.format(year))
+    txtname1 = ('./lastday-txt/{}_year.txt'.format(int(year)-1))
+    txtname2 = ('./lastday-cost-txt/{}_c_year.txt'.format(int(year) - 1))
+    jsoname = ('./lastday-json/{}_c_lastday.json'.format(int(year)-1))
+    dataframe = read_file(filename)
+    sdate = dataframe[2]
+    new_sdate = []
+    for i in sdate:
+        tmp = i.split(' ')
+        if len(tmp) != 0:
+            new_sdate.append(tmp[0])
+        else:
+            new_sdate.append(0)
+            print('DATE SPLIT ERROR!')
+    sdate = np.asarray(new_sdate)
+    flag = dataframe[7]
+    flag = np.asarray(flag).astype(float).astype(int)
+    goods = dataframe[14]
+    goods = np.asarray(goods)
+    num = dataframe[21]
+    num = abs(np.asarray(num).astype(float))
+    # batch = dataframe[33]
+    # batch = np.asarray(batch)
+    pos_flag = dataframe[27]
+    pos_flag = np.asarray(pos_flag)
+    position = dataframe[35]
+    position = np.asarray(position)
+    # goods_in = Goods_in(sdate,goods,flag,num,txtname1,year)
+    # print(goods_in)
+    # goods_out = Goods_out(sdate,goods,flag,num,year)
+    # print(goods_out)
+    # Goods_Storage(goods_in,goods_out,year)
+    Goods_cost(year,jsoname,goods,sdate,position,num,flag,pos_flag,txtname2)
+
+def read_file(filename):
+    dataframe = pandas.read_csv(filename,usecols=[2,7,14,21,27,35],names=None,encoding='ISO-8859-1',header=None,low_memory=False)
+    dataframe = dataframe[1:]
+    return dataframe
+def read_json(jsonname):
+    with open(jsonname,'r') as ff:
+        pos_dict = json.load(ff)
+    return pos_dict
+def read_txt(txtname):
+    with open(txtname,'r') as tt:
+        in_num = tt.read()
+    return in_num
+
+def Goods_in(sdate,goods,flag,num,txtname,year):
+    in_num_list = []
+    if year == '2013':
+        in_date_list = []
+    else:
+        in_date_list = [('{}/1/1').format(year)]
+        in_num_list.append(read_txt(txtname))
+    for s in range(len(sdate)):
+        if goods[s] == '2996':
+            if flag[s]==0 :
+                in_date_list.append(sdate[s])
+                in_num_list.append(num[s])
+    in_newdate = []
+    in_newnum = []
+    sum = 0
+    for i in range(len(in_date_list)):
+        if i == 0:
+            in_newdate.append(in_date_list[0])
+            sum = in_num_list[0]
+        else:
+            if in_date_list[i] != in_date_list[i - 1]:
+                in_newdate.append(in_date_list[i])
+                in_newnum.append(sum)
+                sum = 0
+            sum = sum + in_num_list[i]
+            if i == len(in_date_list) - 1:
+                in_newnum.append(sum)
+    goods_in = np.asarray([])
+    for i in range(len(in_newdate)):
+        if i == 0:
+            goods_in = np.asarray([in_newdate[0], in_newnum[0]]).reshape((1, 2))
+        else:
+            tmp_ = goods_in
+            goods_in  = np.vstack((tmp_,[in_newdate[i],in_newnum[i]]))
+    pic_save_path = ('goods_inpic')
+    if not os.path.exists(pic_save_path):
+        os.makedirs(pic_save_path)
+    plt1 = paint(in_date_list,in_num_list)
+    plt1.savefig('./{}/{}_year_in.png'.format(pic_save_path, year))
+    return goods_in
+def Goods_out(sdate,goods,flag,num,year):
+    out_date_list = []
+    out_num_list = []
+
+    for s in range(len(sdate)):
+        if goods[s] == '2996' and flag[s]==1:
+            out_date_list.append(sdate[s])
+            out_num_list.append(num[s])
+    # print(out_date_list)
+    out_newdate = []
+    out_newnum = []
+    sum = 0
+    for i in range(len(out_date_list)):
+        if i == 0:
+            out_newdate.append(out_date_list[0])
+            sum = out_num_list[0]
+        else:
+            if out_date_list[i] != out_date_list[i - 1]:
+                out_newdate.append(out_date_list[i])
+                out_newnum.append(sum)
+                sum = 0
+            sum = sum + out_num_list[i]
+            if i == len(out_date_list) - 1:
+                out_newnum.append(sum)
+    out_date_array = np.asarray(out_newdate)
+    out_num_array = np.asarray(out_newnum)
+    pic_save_path = ('goods_outpic/{}'.format(year))
+    month_split(out_num_array, out_date_array, pic_save_path)
+    goods_out = np.asarray([])
+    for i in range(len(out_newdate)):
+        if i == 0:
+            goods_out = np.asarray([out_newdate[0], out_newnum[0]]).reshape((1, 2))
+        else:
+            tmp_ = goods_out
+            goods_out = np.vstack((tmp_, [out_newdate[i], out_newnum[i]]))
+    return goods_out
+
+def Goods_Storage(goods_in,goods_out,year):
+    in_date = []
+    in_num = []
+    s_date = []
+    s_num = []
+    for i in goods_in:
+        in_date.append(i[0])
+        in_num.append(i[1])
+    out_date = []
+    out_num = []
+    for j in goods_out:
+        out_date.append(j[0])
+        out_num.append(j[1])
+    k,l,sum= 0,0,0
+    while k<len(in_date) or l <len(out_date):
+        if k<len(in_date) and l<len(out_date):
+            date_in= datetime.datetime.strptime(in_date[k], "%Y/%m/%d")
+            date_out = datetime.datetime.strptime(out_date[l], "%Y/%m/%d")
+            if date_in<date_out:
+                s_date.append(in_date[k])
+                sum = sum+float(in_num[k])
+                k = k+1
+                s_num.append(sum)
+            elif date_in == date_out:
+                s_date.append(in_date[k])
+                sum = sum + float(in_num[k])
+                k = k + 1
+                sum  = sum - float(out_num[l])
+                l = l+1
+                s_num.append(sum)
+            else:
+                s_date.append(out_date[l])
+                sum = sum - float(out_num[l])
+                l = l + 1
+                s_num.append(sum)
+        elif k ==len(in_date):
+            s_date.append(out_date[l])
+            sum = sum - float(out_num[l])
+            l = l + 1
+            s_num.append(sum)
+        else:
+            s_date.append(in_date[k])
+            sum = sum + float(in_num[k])
+            k = k + 1
+            s_num.append(sum)
+    with open('./lastday-txt/{}_year.txt'.format(year),'w') as tt:
+        tt.write(str(s_num[-1]))
+    s_date = np.asarray(s_date)
+    s_num = np.asarray(s_num)
+    pic_save_path = ('goods_num_datepic/{}'.format(year))
+    month_split(s_num, s_date, pic_save_path)
+
+def Goods_cost(year,jsonname,goods,sdate,position,num,flag,pos_flag,txtname):
+    zp_cost = 1
+    sp_cost = 0.8
+    cost = []
+
+    if year == '2013':
+        zp = 0.0
+        sp = 0.0
+        pos_dict = {}
+        date_list = []
+    else:
+        date_list = [('{}/1/1').format(year)]
+        pos_dict = read_json(jsonname)
+        with open(txtname, 'r') as f:
+            lines = f.readlines()
+            line = []
+            for i in lines:
+                line.append(i)
+        cost.append(line[0])
+        zp = float(line[1])
+        sp = float(line[2])
+
+    date_ = '2018/11/7'
+    for s in range(len(sdate)):
+        if goods[s] == '2996':
+            if flag[s] == 0 :
+                if position[s] not in pos_dict.keys():
+                    pos_dict[position[s]] = num[s]
+                    if pos_flag[s] == 0:
+                        zp = zp + 1
+                    else:
+                        sp = sp + 1
+                else:
+                    pos_dict[position[s]] = pos_dict[position[s]] + num[s]
+            else:
+                pos_dict[position[s]] = pos_dict[position[s]] - num[s]
+                if pos_dict[position[s]] <= 0:
+                    del pos_dict[position[s]]
+                    if pos_flag[s] == 0:
+                        zp = zp - 1
+                    else:
+                        sp = sp - 1
+            pos_list = []
+            if sdate[s] != date_:
+                print(zp)
+                print(sp)
+                date_list.append(sdate[s])
+                for i in pos_dict.keys():
+                    pos_list.append(i)
+                cost_sum = zp * zp_cost + sp * sp_cost
+                cost.append(cost_sum)
+                date_ = sdate[s]
+    with open('./lastday-json/{}_c_lastday.json'.format(year), 'w') as j:
+        json.dump(pos_dict, j)
+    with open('./lastday-cost-txt/{}_c_year.txt'.format(year),'w') as tt:
+
+        tt.write(str(cost[-1])+'\n')
+        tt.write(str(zp) + '\n')
+        tt.write(str(sp) + '\n')
+    # print(cost)
+    date_list = np.asarray(date_list)
+    cost = np.asarray(cost)
+    pic_save_path = ('goods_cost_datepic/{}'.format(year))
+    month_split(cost, date_list, pic_save_path)
+
+def month_get(s_date_array):
+    month_list = []
+    for i in s_date_array:
+        tmp = i.split()
+        if len(tmp) != 0:
+            tmp = tmp[0]
+            _tmp = re.split('/', tmp)
+            if len(_tmp) != 0:
+                month = int(_tmp[1])
+            else:
+                month = 0
+                print('GET MONTH ERROR!')
+            month_list.append(month)
+    return month_list
+
+def month_split(s_num_array,s_date_array,pic_save_path):
+    date_mo_dict = {}
+    month_list = month_get(s_date_array)
+    for j in range(len(month_list)):
+        if month_list[j] not in date_mo_dict.keys():
+            date_mo_dict[month_list[j]] = [s_num_array[j], s_date_array[j]]
+        else:
+            tmp_ = date_mo_dict[month_list[j]]
+            date_mo_dict[month_list[j]] = np.vstack((tmp_, [s_num_array[j],s_date_array[j]]))
+    for k in date_mo_dict.keys():
+        array = date_mo_dict[k]
+        num_,date_list = np.split(array, [1], axis=1)
+        r = []
+        for i in date_list:
+            tmp = i[0].split('/')
+            if len(tmp) != 0:
+                r.append(int(tmp[2]))
+            else:
+                r.append(0)
+                print('SPLIT DATE ERROR')
+        sort_dict = dict(zip(r, array))
+        list_sorted = sorted(sort_dict.keys())
+        sort_array = []
+        for i in list_sorted:
+            sort_array.append(sort_dict[i])
+        sort_array = np.asarray(sort_array)
+        num_,date_list = np.split(sort_array, [1], axis=1)
+        num_ = num_.reshape(num_.shape[0]).astype(float)
+        date_list = date_list.reshape(date_list.shape[0])
+        date_list = list(date_list)
+        plt1 = paint(date_list,num_)
+        if os.path.exists(pic_save_path):
+            plt1.savefig('./{}/{}_month.png'.format(pic_save_path, k))
+        else:
+            os.makedirs(pic_save_path)
+            plt1.savefig('./{}/{}_month.png'.format(pic_save_path, k))
+
+def paint(x,y):
+    plt1.figure(figsize=(9,11))
+    plt1.plot(x,y)
+    plt1.xticks(rotation=245)
+    plt1.tick_params(labelsize=11)
+    return plt1
+
+
+
+if __name__ == '__main__':
+    main()
